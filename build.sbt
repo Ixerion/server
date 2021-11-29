@@ -13,4 +13,6 @@ libraryDependencies ++=Seq(
   "org.typelevel" %% "cats-effect" % catsEffectVersion,
   "org.http4s" %% "http4s-blaze-server" % http4sVersion,
   "org.http4s" %% "http4s-dsl" % http4sVersion,
+  "org.slf4j" % "slf4j-nop" % "1.6.4",
+  "ch.qos.logback" % "logback-classic" % "1.2.3",
 )
