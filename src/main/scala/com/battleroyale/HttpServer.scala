@@ -1,33 +1,36 @@
 package com.battleroyale
 
-import cats.effect.{ExitCode, IO, IOApp}
-import cats.implicits.toSemigroupKOps
-import org.http4s.HttpRoutes
-import org.http4s.dsl.io._
+import cats.effect.concurrent.Ref
+import cats.effect.{ConcurrentEffect, ExitCode, Timer}
+import cats.syntax.all._
+import com.battleroyale.model.Player
+import com.battleroyale.routes.WebSocketRoutes
+import com.battleroyale.service.{GameService, PlayerService}
+import fs2.concurrent.Queue
 import org.http4s.implicits.http4sKleisliResponseSyntaxOptionT
 import org.http4s.server.blaze.BlazeServerBuilder
+import org.http4s.server.middleware.Logger
+import org.http4s.websocket.WebSocketFrame
 
 import scala.concurrent.ExecutionContext
 
-object HttpServer extends IOApp {
+object HttpServer {
 
-  private val helloRoutes = HttpRoutes.of[IO] {
+  def run[F[_] : ConcurrentEffect : Timer]: F[ExitCode] =
+    for {
+      playerRef <- Ref.of[F, List[Player]](List.empty)
+      gameRef <- Ref.of[F, Map[Player, Queue[F, WebSocketFrame]]](Map.empty)
+      playerService: PlayerService[F] = PlayerService.of[F](playerRef)
+      gameService: GameService[F] = GameService.of[F](gameRef)
+      wsRoutes = WebSocketRoutes[F](gameService, playerService).routes
 
-    // curl "localhost:9001/hello/world"
-    case GET -> Root / "hello" / name =>
-      Ok(s"Hello, $name!")
-  }
-
-  private val httpApp = Seq(
-    helloRoutes
-  ).reduce(_ <+> _).orNotFound
-
-  override def run(args: List[String]): IO[ExitCode] =
-    BlazeServerBuilder[IO](ExecutionContext.global)
-      .bindHttp(port = 9001, host = "localhost")
-      .withHttpApp(httpApp)
-      .serve
-      .compile
-      .drain
-      .as(ExitCode.Success)
+      httpApp = wsRoutes.orNotFound
+      finalApp = Logger.httpApp(logHeaders = true, logBody = true)(httpApp)
+      _ <- BlazeServerBuilder[F](ExecutionContext.global)
+        .bindHttp(port = 9001, host = "localhost")
+        .withHttpApp(finalApp)
+        .serve
+        .compile
+        .drain
+    } yield ExitCode.Success
 }

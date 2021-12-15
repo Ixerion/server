@@ -7,12 +7,16 @@ scalaVersion := "2.13.7"
 val http4sVersion = "0.21.22"
 val catsVersion = "2.2.0"
 val catsEffectVersion = "2.2.0"
+val circeVersion = "0.13.0"
 
-libraryDependencies ++=Seq(
+libraryDependencies ++= Seq(
   "org.typelevel" %% "cats-core" % catsVersion,
   "org.typelevel" %% "cats-effect" % catsEffectVersion,
   "org.http4s" %% "http4s-blaze-server" % http4sVersion,
+  "org.http4s" %% "http4s-circe" % http4sVersion,
   "org.http4s" %% "http4s-dsl" % http4sVersion,
   "org.slf4j" % "slf4j-nop" % "1.6.4",
   "ch.qos.logback" % "logback-classic" % "1.2.3",
+  "io.circe" %% "circe-generic" % circeVersion,
+  "io.circe" %% "circe-parser" % circeVersion,
 )
