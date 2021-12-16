@@ -1,5 +1,6 @@
 package com.battleroyale.routes
 
+import cats.Applicative
 import cats.effect.{Concurrent, Timer}
 import cats.syntax.all._
 import com.battleroyale.service.{GameService, PlayerService}
@@ -9,7 +10,7 @@ import org.http4s.dsl.Http4sDsl
 import org.http4s.server.websocket.WebSocketBuilder
 import org.http4s.websocket.WebSocketFrame
 
-final case class WebSocketRoutes[F[_] : Concurrent: Timer](gameService: GameService[F], playerService: PlayerService[F])
+final case class WebSocketRoutes[F[_] : Concurrent : Timer](gameService: GameService[F], playerService: PlayerService[F])
   extends Http4sDsl[F] {
 
   // websocat "ws://localhost:9001/client"
@@ -25,13 +26,14 @@ final case class WebSocketRoutes[F[_] : Concurrent: Timer](gameService: GameServ
         case WebSocketFrame.Text(message, _) => Concurrent[F].pure(println(s"received new message: $message"))
       }
 
-
       for {
         player <- playerService.createPlayer
         queue <- gameService.createQueueForPlayer(player)
         currentPlayers <- playerService.playersList
         _ <- gameService.createNotificationForPlayer(player, WebSocketFrame.Text(s"Your id: ${player.id}")) *>
-        gameService.createNotificationForPlayers(WebSocketFrame.Text(s"Current players amount: ${currentPlayers.size}"))
+          gameService.createNotificationForPlayers(WebSocketFrame.Text(s"Current players amount: ${currentPlayers.size}"))
+        _ <- Applicative[F].whenA(currentPlayers.size == 3)(
+          gameService.createNotificationForPlayers(WebSocketFrame.Text("GAME STARTED"))) //TODO start the game here
 
         /*gameServiceMap <- gameService.getThisStupidMap
         _ = println(gameServiceMap)
@@ -46,7 +48,8 @@ final case class WebSocketRoutes[F[_] : Concurrent: Timer](gameService: GameServ
           receive = queue.enqueue
         )*/
         response <- WebSocketBuilder[F].build(
-          send = queue.dequeue/*.merge(Stream.repeatEval(Concurrent[F].pure(WebSocketFrame.Text("2222222"))))*/ /*.map(q => WebSocketFrame.Text(s"${}"))*/ ,
+          send = queue.dequeue /*.merge(Stream.repeatEval(Concurrent[F].pure(WebSocketFrame.Text("2222222"))))*/
+          /*.map(q => WebSocketFrame.Text(s"${}"))*/ ,
           receive = receivePipe)
       } yield response
   }

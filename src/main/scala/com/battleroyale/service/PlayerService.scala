@@ -9,6 +9,7 @@ import java.util.UUID
 
 trait PlayerService[F[_]] {
   def createPlayer: F[Player]
+
   def playersList: F[List[Player]]
 }
 
