@@ -1,6 +1,6 @@
 package com.battleroyale.routes
 
-import cats.effect.Concurrent
+import cats.effect.{Concurrent, Timer}
 import cats.syntax.all._
 import com.battleroyale.service.{GameService, PlayerService}
 import fs2._
@@ -9,7 +9,7 @@ import org.http4s.dsl.Http4sDsl
 import org.http4s.server.websocket.WebSocketBuilder
 import org.http4s.websocket.WebSocketFrame
 
-final case class WebSocketRoutes[F[_] : Concurrent](gameService: GameService[F], playerService: PlayerService[F])
+final case class WebSocketRoutes[F[_] : Concurrent: Timer](gameService: GameService[F], playerService: PlayerService[F])
   extends Http4sDsl[F] {
 
   // websocat "ws://localhost:9001/client"
@@ -21,19 +21,33 @@ final case class WebSocketRoutes[F[_] : Concurrent](gameService: GameService[F],
           case WebSocketFrame.Text(message, _) => WebSocketFrame.Text(message)
         }
 
+      val receivePipe: Pipe[F, WebSocketFrame, Unit] = (q: Stream[F, WebSocketFrame]) => q.evalMap {
+        case WebSocketFrame.Text(message, _) => Concurrent[F].pure(println(s"received new message: $message"))
+      }
+
+
       for {
         player <- playerService.createPlayer
-        _ = println(player)
         queue <- gameService.createQueueForPlayer(player)
-        _ = println(queue)
-        _ <- queue.enqueue1(WebSocketFrame.Text(s"your id: ${player.id}"))
-        response <- WebSocketBuilder[F].build(
+        currentPlayers <- playerService.playersList
+        _ <- gameService.createNotificationForPlayer(player, WebSocketFrame.Text(s"Your id: ${player.id}")) *>
+        gameService.createNotificationForPlayers(WebSocketFrame.Text(s"Current players amount: ${currentPlayers.size}"))
+
+        /*gameServiceMap <- gameService.getThisStupidMap
+        _ = println(gameServiceMap)
+        list = gameServiceMap.values
+        _ <- list.map(_.enqueue1(WebSocketFrame.Text(s"current players: ${currentPlayers.map(_.id).mkString(", ")}"))).toList.sequence*/
+
+        /*response <- WebSocketBuilder[F].build(
           // Outgoing stream of WebSocket messages to send to the client. (toClient)
           send = queue.dequeue.through(echoPipe),
 
           // Sink, where the incoming WebSocket messages from the client are pushed to. (fromClient)
           receive = queue.enqueue
-        )
+        )*/
+        response <- WebSocketBuilder[F].build(
+          send = queue.dequeue/*.merge(Stream.repeatEval(Concurrent[F].pure(WebSocketFrame.Text("2222222"))))*/ /*.map(q => WebSocketFrame.Text(s"${}"))*/ ,
+          receive = receivePipe)
       } yield response
   }
 }

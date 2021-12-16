@@ -9,6 +9,7 @@ import java.util.UUID
 
 trait PlayerService[F[_]] {
   def createPlayer: F[Player]
+  def playersList: F[List[Player]]
 }
 
 object PlayerService {
@@ -18,8 +19,12 @@ object PlayerService {
       players <- ref.get
       freshPlayer = Player(UUID.randomUUID().toString)
       updatedList = players :+ freshPlayer
-      _ <- ref.set(updatedList)
+      _ <- ref.update(_ => updatedList)
     } yield freshPlayer
+
+    override def playersList: F[List[Player]] = for {
+      players <- ref.get
+    } yield players
   }
 }
 
