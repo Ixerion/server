@@ -3,9 +3,9 @@ package com.battleroyale
 import cats.effect.concurrent.Ref
 import cats.effect.{ConcurrentEffect, ExitCode, Timer}
 import cats.syntax.all._
-import com.battleroyale.model.Player
+import com.battleroyale.model.Answer
 import com.battleroyale.routes.WebSocketRoutes
-import com.battleroyale.service.{GameService, PlayerService}
+import com.battleroyale.service.{GameService, PlayerService, QueueService}
 import fs2.concurrent.Queue
 import org.http4s.implicits.http4sKleisliResponseSyntaxOptionT
 import org.http4s.server.blaze.BlazeServerBuilder
@@ -18,14 +18,15 @@ object HttpServer {
 
   def run[F[_] : ConcurrentEffect : Timer]: F[ExitCode] =
     for {
-      playerRef <- Ref.of[F, List[Player]](List.empty)
-      gameRef <- Ref.of[F, Map[Player, Queue[F, WebSocketFrame]]](Map.empty)
-      playerService: PlayerService[F] = PlayerService.of[F](playerRef)
-      gameService: GameService[F] = GameService.of[F](gameRef)
-      wsRoutes = WebSocketRoutes[F](gameService, playerService).routes
+      playerRef <- Ref.of[F, List[String]](List.empty)
+      queueRef <- Ref.of[F, Map[String, Queue[F, WebSocketFrame]]](Map.empty)
+      gameRef <- Ref.of[F, Map[String, Answer]](Map.empty)
+      playerService = PlayerService.of[F](playerRef)
+      queueService = QueueService.of[F](queueRef)
+      gameService = GameService.of[F](playerService, queueService, gameRef)
+      wsRoutes = WebSocketRoutes[F](queueService, playerService, gameService).routes
 
-      httpApp = wsRoutes.orNotFound
-      finalApp = Logger.httpApp(logHeaders = true, logBody = true)(httpApp)
+      finalApp = Logger.httpApp(logHeaders = true, logBody = true)(wsRoutes.orNotFound)
       _ <- BlazeServerBuilder[F](ExecutionContext.global)
         .bindHttp(port = 9001, host = "localhost")
         .withHttpApp(finalApp)

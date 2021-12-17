@@ -1,53 +1,47 @@
 package com.battleroyale.service
 
-import cats.Monad
-import cats.effect.Concurrent
+import cats.{Applicative, Monad}
 import cats.effect.concurrent.Ref
-import cats.syntax.all._
-import com.battleroyale.model.Player
-import fs2.concurrent.Queue
+import cats.implicits._
+import com.battleroyale.model.{Action, Answer}
 import org.http4s.websocket.WebSocketFrame
 
 trait GameService[F[_]] {
-  def createQueueForPlayer(player: Player): F[Queue[F, WebSocketFrame]]
 
-  def getThisStupidMap: F[Map[Player, Queue[F, WebSocketFrame]]]
-
-  def createNotificationForPlayer(player: Player, webSocketFrame: WebSocketFrame): F[Unit]
-
-  def createNotificationForPlayers(webSocketFrame: WebSocketFrame): F[Unit]
+  def analyzeAnswer(action: Action): F[Unit]
+  def initiateGame: F[Unit]
+  def deletePlayer(playerId: String): F[Unit]
+  //TODO add game cycle or something
 }
 
 object GameService {
+  def of[F[_] : Monad](playerService: PlayerService[F], queueService: QueueService[F],
+               gameRef: Ref[F, Map[String, Answer]]): GameService[F] = new GameService[F] {
 
-  def of[F[_] : Monad : Concurrent](gameRef: Ref[F, Map[Player, Queue[F, WebSocketFrame]]]): GameService[F] = new GameService[F] {
+    def analyzeAnswer(action: Action): F[Unit] = for {
+      gameState <- gameRef.updateAndGet(_.updated(action.playerId, action.answer))
+      filteredMap = gameState.filter(v => v._2.value == 0)
+      playersWithNoAnswer = filteredMap.keys.toList
+      _ <- queueService.createNotificationForPlayers(playersWithNoAnswer, WebSocketFrame.Text("Please answer something")) *>
+        queueService.createNotificationForPlayers(WebSocketFrame.Text(gameState.toString()))
+      _ <- Applicative[F].whenA(playersWithNoAnswer.size == 1)(deletePlayer(playersWithNoAnswer.head))
+    } yield ()
 
-    def createQueueForPlayer(player: Player): F[Queue[F, WebSocketFrame]] = {
-      Queue.unbounded[F, WebSocketFrame].flatMap {
-        queue =>
-          for {
-            _ <- gameRef.updateAndGet(playerQueuesMap => playerQueuesMap + (player -> queue))
-          } yield queue
-      }
-    }
+    def initiateGame: F[Unit] = for {
+      players <- playerService.playersList
+      initiated = players.map(playerId => (playerId, Answer(0))).toMap
+      _ <- gameRef.update(_ => initiated)
+      _ <- queueService.createNotificationForPlayers(WebSocketFrame.Text(initiated.toString()))
+    } yield ()
 
-    def getThisStupidMap: F[Map[Player, Queue[F, WebSocketFrame]]] = for {
-      map <- gameRef.get
-    } yield map
-
-    def createNotificationForPlayer(player: Player, webSocketFrame: WebSocketFrame): F[Unit] = {
-      val map = gameRef.get
-      map.flatMap(playersMap => {
-        val queue = playersMap(player)
-        queue.enqueue1(webSocketFrame)
-      })
-    }
-
-    override def createNotificationForPlayers(webSocketFrame: WebSocketFrame): F[Unit] = {
-      val map = gameRef.get
-      map.flatMap(playersMap => {
-        playersMap.values.toList.map(_.enqueue1(webSocketFrame)).sequence_
-      })
-    }
+    def deletePlayer(playerId: String): F[Unit] = for {
+      init <- gameRef.get
+      _ <- playerService.removePlayer(playerId)
+      updated = init - playerId
+      _ <- gameRef.update(_ => updated)
+      _ <- queueService.createNotificationForPlayers(WebSocketFrame.Text(updated.toString()))
+    } yield ()
   }
 }
+
+

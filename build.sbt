@@ -19,4 +19,5 @@ libraryDependencies ++= Seq(
   "ch.qos.logback" % "logback-classic" % "1.2.3",
   "io.circe" %% "circe-generic" % circeVersion,
   "io.circe" %% "circe-parser" % circeVersion,
+  "io.circe" %% "circe-generic-extras" % circeVersion,
 )
