@@ -20,4 +20,5 @@ libraryDependencies ++= Seq(
   "io.circe" %% "circe-generic" % circeVersion,
   "io.circe" %% "circe-parser" % circeVersion,
   "io.circe" %% "circe-generic-extras" % circeVersion,
+  "com.evolutiongaming" %% "cats-helper" % "2.2.3",
 )
