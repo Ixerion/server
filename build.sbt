@@ -4,10 +4,14 @@ version := "0.1"
 
 scalaVersion := "2.13.7"
 
+autoCompilerPlugins := true
+
 val http4sVersion = "0.21.22"
 val catsVersion = "2.2.0"
 val catsEffectVersion = "2.2.0"
 val circeVersion = "0.13.0"
+
+addCompilerPlugin("com.olegpy" %% "better-monadic-for" % "0.3.1")
 
 libraryDependencies ++= Seq(
   "org.typelevel" %% "cats-core" % catsVersion,

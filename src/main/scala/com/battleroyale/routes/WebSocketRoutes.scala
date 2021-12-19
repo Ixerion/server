@@ -22,7 +22,7 @@ final case class WebSocketRoutes[F[_] : Concurrent : Timer](queueService: QueueS
       val receivePipe: Pipe[F, WebSocketFrame, Unit] = (stream: Stream[F, WebSocketFrame]) => stream.evalMap {
         case WebSocketFrame.Text(message, _) =>
           Concurrent[F].delay(decode[Action](message)).flatMap {
-            case Left(_)       => Concurrent[F].unit
+            case Left(_)       => Concurrent[F].unit //TODO add error for specific user (add playerId param to receivePipe)
             case Right(action) => gameService.analyzeAnswer(action)
           }
       }
@@ -34,7 +34,7 @@ final case class WebSocketRoutes[F[_] : Concurrent : Timer](queueService: QueueS
         _ <- queueService.createNotificationForPlayer(player.id, WebSocketFrame.Text(s"Your id: ${player.id}")) *>
           queueService.createNotificationForPlayers(WebSocketFrame.Text(s"Current players amount: ${currentPlayers.size}"))
         _ <- Applicative[F].whenA(currentPlayers.size == 3)(
-          queueService.createNotificationForPlayers(WebSocketFrame.Text("GAME STARTED")) *> gameService.initiateGame) //TODO start the game here
+          queueService.createNotificationForPlayers(WebSocketFrame.Text("GAME STARTED")) *> gameService.initiateGameCycle)
 
         response <- WebSocketBuilder[F].build(
           send = queue.dequeue,
