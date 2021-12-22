@@ -11,8 +11,9 @@ import org.http4s.websocket.WebSocketFrame
 trait QueueService[F[_]] {
   def createQueueForPlayer(playerId: String): F[Queue[F, WebSocketFrame]]
   def createNotificationForPlayer(playerId: String, webSocketFrame: WebSocketFrame): F[Unit]
-  def createNotificationForPlayers(webSocketFrame: WebSocketFrame): F[Unit]
+  def createNotificationForAllPlayers(webSocketFrame: WebSocketFrame): F[Unit]
   def createNotificationForSpecificPlayers(players: List[String], webSocketFrame: WebSocketFrame): F[Unit]
+  def deleteNotificationsForPlayer(player: String): F[Unit]
 }
 
 object QueueService {
@@ -38,19 +39,23 @@ object QueueService {
           })
         }
 
-        override def createNotificationForPlayers(webSocketFrame: WebSocketFrame): F[Unit] = {
+        def createNotificationForAllPlayers(webSocketFrame: WebSocketFrame): F[Unit] = {
           val map = queueRef.get
           map.flatMap(playerQueueMap => {
             playerQueueMap.values.toList.map(_.enqueue1(webSocketFrame)).sequence_
           })
         }
 
-        override def createNotificationForSpecificPlayers(players: List[String], webSocketFrame: WebSocketFrame): F[Unit] = {
+        def createNotificationForSpecificPlayers(players: List[String], webSocketFrame: WebSocketFrame): F[Unit] = {
           val map = queueRef.get
           map.flatMap(playerQueueMap => {
             playerQueueMap.filter(v => players.contains(v._1)).values.toList.map(_.enqueue1(webSocketFrame)).sequence_
           })
         }
+
+        def deleteNotificationsForPlayer(player: String): F[Unit] = for {
+          _ <- queueRef.update(_ - player)
+        } yield ()
       }
   }
 }

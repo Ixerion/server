@@ -1,3 +1,3 @@
 package com.battleroyale.model
 
-final case class GameState(question: Question, state: Boolean, playersWithAnswers: Map[Player, Answer])
+final case class GameState(everyoneAnswered: Boolean, playersWithAnswers: Map[String, Answer])
