@@ -3,10 +3,11 @@ package com.battleroyale
 import cats.effect.concurrent.Ref
 import cats.effect.{ConcurrentEffect, ExitCode, Timer}
 import cats.syntax.all._
-import com.battleroyale.model.Answer
+import com.battleroyale.model.GameState
 import com.battleroyale.model.Player.PlayerId
+import com.battleroyale.model.Question.NoQuestion
 import com.battleroyale.routes.WebSocketRoutes
-import com.battleroyale.service.{GameService, PlayerService, QueueService}
+import com.battleroyale.service.{GameService, QuestionService, PlayerService, QueueService}
 import com.evolutiongaming.catshelper.LogOf
 import fs2.concurrent.Queue
 import org.http4s.implicits.http4sKleisliResponseSyntaxOptionT
@@ -22,11 +23,12 @@ object HttpServer {
     for {
       playerRef <- Ref.of[F, List[PlayerId]](List.empty)
       queueRef <- Ref.of[F, Map[PlayerId, Queue[F, WebSocketFrame]]](Map.empty)
-      gameRef <- Ref.of[F, Map[PlayerId, Answer]](Map.empty)
+      gameStateRef <- Ref.of[F, GameState](GameState(everyoneAnswered = false, Map.empty, NoQuestion))
       implicit0(logOf: LogOf[F]) <- LogOf.slf4j[F]
+      mathProblemService <- QuestionService.of[F]
       playerService <- PlayerService.of[F](playerRef)
       queueService <- QueueService.of[F](queueRef)
-      gameService <- GameService.of[F](playerService, queueService, gameRef)
+      gameService <- GameService.of[F](playerService, queueService, gameStateRef, mathProblemService)
       wsRoutes = WebSocketRoutes[F](queueService, playerService, gameService).routes
 
       finalApp = Logger.httpApp(logHeaders = true, logBody = true)(wsRoutes.orNotFound)

@@ -20,11 +20,14 @@ final case class WebSocketRoutes[F[_] : Concurrent : Timer](queueService: QueueS
     case GET -> Root / "client" =>
 
       def receivePipe(player: Player): Pipe[F, WebSocketFrame, Unit] = (stream: Stream[F, WebSocketFrame]) => stream.evalMap {
+
         case WebSocketFrame.Text(message, _) =>
           Concurrent[F].delay(decode[Action](message)).flatMap {
             case Left(_)       => queueService.createNotificationForPlayer(player.id, WebSocketFrame.Text("Wrong format, try again"))
             case Right(action) => gameService.analyzeAnswer(action)
           }
+
+        case WebSocketFrame.Close(_) => Concurrent[F].delay(println("Closed connection haha"))
       }
 
       for {
