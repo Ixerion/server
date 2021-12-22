@@ -1,3 +1,5 @@
 package com.battleroyale.model
 
-final case class GameState(everyoneAnswered: Boolean, playersWithAnswers: Map[String, Answer])
+import com.battleroyale.model.Player.PlayerId
+
+final case class GameState(everyoneAnswered: Boolean, playersWithAnswers: Map[PlayerId, Answer])

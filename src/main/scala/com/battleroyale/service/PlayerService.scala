@@ -4,19 +4,20 @@ import cats.Monad
 import cats.effect.concurrent.Ref
 import cats.implicits._
 import com.battleroyale.model.Player
+import com.battleroyale.model.Player.PlayerId
 import com.evolutiongaming.catshelper.LogOf
 
 import java.util.UUID
 
 trait PlayerService[F[_]] {
   def createPlayer: F[Player]
-  def removePlayer(playerId: String): F[Unit]
-  def playersList: F[List[String]]
+  def removePlayer(playerId: PlayerId): F[Unit]
+  def playersList: F[List[PlayerId]]
 }
 
 object PlayerService {
 
-  def of[F[_] : Monad : LogOf](ref: Ref[F, List[String]]): F[PlayerService[F]] = LogOf[F].apply(getClass).map {
+  def of[F[_] : Monad : LogOf](ref: Ref[F, List[PlayerId]]): F[PlayerService[F]] = LogOf[F].apply(getClass).map {
     log =>
       new PlayerService[F] {
         def createPlayer: F[Player] = for {
@@ -27,11 +28,11 @@ object PlayerService {
           _ <- ref.update(_ => updatedList)
         } yield freshPlayer
 
-        def playersList: F[List[String]] = for {
+        def playersList: F[List[PlayerId]] = for {
           players <- ref.get
         } yield players
 
-        def removePlayer(playerId: String): F[Unit] = for {
+        def removePlayer(playerId: PlayerId): F[Unit] = for {
           _ <- ref.update(list => list.filter(_ != playerId))
         } yield ()
       }

@@ -4,6 +4,7 @@ import cats.effect.concurrent.Ref
 import cats.effect.{ConcurrentEffect, ExitCode, Timer}
 import cats.syntax.all._
 import com.battleroyale.model.Answer
+import com.battleroyale.model.Player.PlayerId
 import com.battleroyale.routes.WebSocketRoutes
 import com.battleroyale.service.{GameService, PlayerService, QueueService}
 import com.evolutiongaming.catshelper.LogOf
@@ -19,9 +20,9 @@ object HttpServer {
 
   def run[F[_] : ConcurrentEffect : Timer]: F[ExitCode] =
     for {
-      playerRef <- Ref.of[F, List[String]](List.empty)
-      queueRef <- Ref.of[F, Map[String, Queue[F, WebSocketFrame]]](Map.empty)
-      gameRef <- Ref.of[F, Map[String, Answer]](Map.empty)
+      playerRef <- Ref.of[F, List[PlayerId]](List.empty)
+      queueRef <- Ref.of[F, Map[PlayerId, Queue[F, WebSocketFrame]]](Map.empty)
+      gameRef <- Ref.of[F, Map[PlayerId, Answer]](Map.empty)
       implicit0(logOf: LogOf[F]) <- LogOf.slf4j[F]
       playerService <- PlayerService.of[F](playerRef)
       queueService <- QueueService.of[F](queueRef)

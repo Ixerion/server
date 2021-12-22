@@ -3,6 +3,7 @@ package com.battleroyale.service
 import cats.effect.Sync
 import cats.effect.concurrent.Ref
 import cats.implicits._
+import com.battleroyale.model.Player.PlayerId
 import com.battleroyale.model.{Action, Answer, GameState}
 import com.evolutiongaming.catshelper.LogOf
 import org.http4s.websocket.WebSocketFrame
@@ -10,13 +11,15 @@ import org.http4s.websocket.WebSocketFrame
 trait GameService[F[_]] {
 
   def analyzeAnswer(action: Action): F[Unit]
-  def initiateGameCycle(players: List[String]): F[Unit]
-  def deletePlayer(playerId: String): F[Unit]
+  def initiateGameCycle(players: List[PlayerId]): F[Unit]
+  def deletePlayer(playerId: PlayerId): F[Unit]
+  def endGame(players: List[PlayerId]): F[Unit]
+  def analyzeGameState(action: Action): F[GameState]
 }
 
 object GameService {
   def of[F[_] : Sync : LogOf](playerService: PlayerService[F], queueService: QueueService[F],
-                               gameRef: Ref[F, Map[String, Answer]]): F[GameService[F]] = LogOf[F].apply(getClass).map {
+                               gameRef: Ref[F, Map[PlayerId, Answer]]): F[GameService[F]] = LogOf[F].apply(getClass).map {
     log =>
       new GameService[F] {
 
@@ -34,7 +37,7 @@ object GameService {
           _ <- queueService.createNotificationForAllPlayers(WebSocketFrame.Text(s"Current Game State: $state"))
         } yield GameState(everyoneAnswered, state)
 
-        def endGame(players: List[String]): F[Unit] = {
+        def endGame(players: List[PlayerId]): F[Unit] = {
           val lastPlayer = players.head
           for {
             _ <- queueService.createNotificationForPlayer(lastPlayer, WebSocketFrame.Text("WINNER WINNER CHICKEN DINNER"))
@@ -54,7 +57,7 @@ object GameService {
           }
         } yield ()
 
-        def initiateGameCycle(players: List[String]): F[Unit] = {
+        def initiateGameCycle(players: List[PlayerId]): F[Unit] = {
           val playersInGame = players.map(playerId => (playerId, Answer(0))).toMap
           for {
             _ <- gameRef.update(_ => playersInGame)
@@ -68,7 +71,7 @@ object GameService {
           //TODO send math problem here
         } yield ()*/
 
-        def deletePlayer(playerId: String): F[Unit] = for {
+        def deletePlayer(playerId: PlayerId): F[Unit] = for {
           _ <- queueService.createNotificationForPlayer(playerId, WebSocketFrame.Text("Sorry, you lost"))
           _ <- queueService.deleteNotificationsForPlayer(playerId)
           _ <- playerService.removePlayer(playerId)
