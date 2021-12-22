@@ -1,5 +1,6 @@
 package com.battleroyale.service
 
+import cats.Applicative
 import cats.effect.Sync
 import cats.effect.concurrent.Ref
 import cats.implicits._
@@ -28,11 +29,7 @@ object GameService {
           playersWithNoAnswer = currentState.filter(v => v._2.value == 0)
           everyoneAnswered = playersWithNoAnswer.isEmpty
           //TODO question resolver here
-          _ <- if (everyoneAnswered) {
-            deletePlayer(currentState.keys.toList.head)
-          } else {
-            Sync[F].unit
-          }
+          _ <- Applicative[F].whenA(everyoneAnswered)(deletePlayer(currentState.keys.toList.head))
           state <- gameRef.get
           _ <- queueService.createNotificationForAllPlayers(WebSocketFrame.Text(s"Current Game State: $state"))
         } yield GameState(everyoneAnswered, state)
@@ -61,15 +58,10 @@ object GameService {
           val playersInGame = players.map(playerId => (playerId, Answer(0))).toMap
           for {
             _ <- gameRef.update(_ => playersInGame)
-            _ <- queueService.createNotificationForAllPlayers(WebSocketFrame.Text(s"Initiating new game cycle: ${playersInGame.toString()}"))
+            _ <- queueService.createNotificationForAllPlayers(WebSocketFrame.Text(s"Initiating new game cycle: \n${playersInGame.toString()}"))
+            //TODO send math problem here
           } yield ()
-        }/*for {
-          //players <- playerService.playersList
-          initiated <- players.map(playerId => (playerId, Answer(0))).toMap
-          _ <- gameRef.update(_ => initiated)
-          _ <- queueService.createNotificationForPlayers(WebSocketFrame.Text(initiated.toString()))
-          //TODO send math problem here
-        } yield ()*/
+        }
 
         def deletePlayer(playerId: PlayerId): F[Unit] = for {
           _ <- queueService.createNotificationForPlayer(playerId, WebSocketFrame.Text("Sorry, you lost")) *>
