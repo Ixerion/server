@@ -72,7 +72,8 @@ object GameService {
         } yield ()*/
 
         def deletePlayer(playerId: PlayerId): F[Unit] = for {
-          _ <- queueService.createNotificationForPlayer(playerId, WebSocketFrame.Text("Sorry, you lost"))
+          _ <- queueService.createNotificationForPlayer(playerId, WebSocketFrame.Text("Sorry, you lost")) *>
+            queueService.createNotificationForPlayer(playerId, WebSocketFrame.Close())
           _ <- queueService.deleteNotificationsForPlayer(playerId)
           _ <- playerService.removePlayer(playerId)
           updated <- gameRef.updateAndGet(_ - playerId)
