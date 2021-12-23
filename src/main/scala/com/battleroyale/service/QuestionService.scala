@@ -23,10 +23,20 @@ object QuestionService {
           _ <- log.info(s"New question created: ${question.description}")
         } yield question
 
-        def findTheStupidOne(gameState: GameState): F[Option[PlayerId]] = for {
-          playerToKick <- Sync[F].delay(gameState.playersWithAnswers.keys.toList.head.some)
-          _ <- log.info(s"Player to kick: $playerToKick")
-        } yield playerToKick
+        def findTheStupidOne(gameState: GameState): F[Option[PlayerId]] = {
+          for {
+            playerToKick <- Sync[F].delay({
+              val players = gameState.playersWithAnswers
+              val correctAnswer = gameState.question.get.correctAnswer
+              if (players.values.map(_.value).toSet.size == 1)
+                None
+              else {
+                players.maxBy {case (_, answer) =>math.abs(correctAnswer - answer.value)}._1.some
+              }
+            })
+            _ <- log.info(s"Player to kick: $playerToKick")
+          } yield playerToKick
+        }
       }
   }
 }
