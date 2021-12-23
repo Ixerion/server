@@ -3,7 +3,7 @@ package com.battleroyale.routes
 import cats.Applicative
 import cats.effect.{Concurrent, Timer}
 import cats.syntax.all._
-import com.battleroyale.model.{Action, Player}
+import com.battleroyale.model.{Action, Message, Player}
 import com.battleroyale.service.{GameService, PlayerService, QueueService}
 import fs2.{Pipe, Stream}
 import io.circe.jawn._
@@ -20,25 +20,23 @@ final case class WebSocketRoutes[F[_] : Concurrent : Timer](queueService: QueueS
     case GET -> Root / "client" =>
 
       def receivePipe(player: Player): Pipe[F, WebSocketFrame, Unit] = (stream: Stream[F, WebSocketFrame]) => stream.evalMap {
-
         case WebSocketFrame.Text(message, _) =>
           Concurrent[F].delay(decode[Action](message)).flatMap {
-            case Left(_)       => queueService.createNotificationForPlayer(player.id, WebSocketFrame.Text("Wrong format, try again"))
+            case Left(_)       => queueService.createNotificationForPlayer(player.id, Message("Wrong format, try again"))
             case Right(action) => gameService.analyzeAnswer(action)
           }
-        case WebSocketFrame.Close(_) => Concurrent[F].delay(println(s"Closed connection for user: ${player.id}"))
       }
 
       for {
         player <- playerService.createPlayer
-        queue <- queueService.createQueueForPlayer(player.id) //TODO switch queue type to [F, Message] or something like that
+        queue <- queueService.createQueueForPlayer(player.id)
         currentPlayers <- playerService.playersList
-        _ <- queueService.createNotificationForPlayer(player.id, WebSocketFrame.Text(s"Your id: ${player.id}")) *>
-          queueService.createNotificationForAllPlayers(WebSocketFrame.Text(s"Current players amount: ${currentPlayers.size}"))
+        _ <- queueService.createNotificationForPlayer(player.id, Message(s"Your id: ${player.id}")) *>
+          queueService.createNotificationForAllPlayers(Message(s"Current players amount: ${currentPlayers.size}"))
         _ <- Applicative[F].whenA(currentPlayers.size == 3)(gameService.initiateGameCycle(currentPlayers))
 
         response <- WebSocketBuilder[F].build(
-          send = queue.dequeue,
+          send = queue.dequeue.map(message => WebSocketFrame.Text(message.description)),
           receive = receivePipe(player))
       } yield response
   }

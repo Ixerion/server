@@ -5,9 +5,8 @@ import cats.effect.Sync
 import cats.effect.concurrent.Ref
 import cats.implicits._
 import com.battleroyale.model.Player.PlayerId
-import com.battleroyale.model.{Action, Answer, GameState}
+import com.battleroyale.model.{Action, Answer, GameState, Message}
 import com.evolutiongaming.catshelper.LogOf
-import org.http4s.websocket.WebSocketFrame
 
 trait GameService[F[_]] {
 
@@ -37,13 +36,13 @@ object GameService {
         def endGame(players: List[PlayerId]): F[Unit] = {
           val lastPlayer = players.head
           for {
-            _ <- queueService.createNotificationForPlayer(lastPlayer, WebSocketFrame.Text("WINNER WINNER CHICKEN DINNER"))
+            _ <- queueService.createNotificationForPlayer(lastPlayer, Message("WINNER WINNER CHICKEN DINNER"))
           } yield ()
         }
 
         def analyzeCorrectPlayerAnswer(action: Action): F[GameState] = for {
           currentState <- gameStateRef.updateAndGet(w => w.copy(playersWithAnswers = w.playersWithAnswers.updated(action.playerId, action.answer)))
-          _ <- queueService.createNotificationForPlayer(action.playerId, WebSocketFrame.Text("Answer accepted"))
+          _ <- queueService.createNotificationForPlayer(action.playerId, Message("Answer accepted"))
           playersWithNoAnswer = !currentState.playersWithAnswers.exists(v => v._2.value == 0)
           _ <- Applicative[F].whenA(playersWithNoAnswer)(kickPlayerWithWrongAnswer(currentState))
           state <- gameStateRef.get
@@ -67,7 +66,7 @@ object GameService {
           whoToKick <- mathProblemService.findTheStupidOne(gameState)
           _ <- whoToKick match {
             case Some(playerId) => deletePlayer(playerId)
-            case None        => queueService.createNotificationForAllPlayers(WebSocketFrame.Text("No players were deleted, new math problem..."))
+            case None        => queueService.createNotificationForAllPlayers(Message("No players were deleted, new math problem..."))
           }
         } yield ()
 
@@ -77,18 +76,17 @@ object GameService {
             _ <- gameStateRef.update(_.copy(playersWithAnswers = playersInGame))
             generatedQuestion <- mathProblemService.generateMathProblem
             _ <- gameStateRef.updateAndGet(_.copy(question = Some(generatedQuestion)))
-            _ <- queueService.createNotificationForAllPlayers(WebSocketFrame.Text(s"Initiating new game cycle... \nNew question: ${generatedQuestion.description}"))
+            _ <- queueService.createNotificationForAllPlayers(Message(s"Initiating new game cycle... \nNew question: ${generatedQuestion.description}"))
           } yield ()
         }
 
         def deletePlayer(playerId: PlayerId): F[Unit] = for {
-          _ <- queueService.createNotificationForPlayer(playerId, WebSocketFrame.Text("Sorry, you lost")) *>
-            queueService.createNotificationForPlayer(playerId, WebSocketFrame.Close())
+          _ <- queueService.createNotificationForPlayer(playerId, Message("Sorry, you lost"))
           _ <- queueService.deleteNotificationsForPlayer(playerId)
           _ <- playerService.removePlayer(playerId)
           stateBeforeDeletion <- gameStateRef.get
           updated <- gameStateRef.updateAndGet(_.copy(playersWithAnswers = stateBeforeDeletion.playersWithAnswers - playerId))
-          _ <- queueService.createNotificationForAllPlayers(WebSocketFrame.Text(s"After successful deletion: ${updated.playersWithAnswers.toString()}"))
+          _ <- queueService.createNotificationForAllPlayers(Message(s"After successful deletion: ${updated.playersWithAnswers.toString()}"))
         } yield ()
       }
   }
