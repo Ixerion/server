@@ -26,8 +26,7 @@ final case class WebSocketRoutes[F[_] : Concurrent : Timer](queueService: QueueS
             case Left(_)       => queueService.createNotificationForPlayer(player.id, WebSocketFrame.Text("Wrong format, try again"))
             case Right(action) => gameService.analyzeAnswer(action)
           }
-
-        case WebSocketFrame.Close(_) => Concurrent[F].delay(println("Closed connection haha"))
+        case WebSocketFrame.Close(_) => Concurrent[F].delay(println(s"Closed connection for user: ${player.id}"))
       }
 
       for {

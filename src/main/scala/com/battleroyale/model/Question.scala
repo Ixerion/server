@@ -3,12 +3,9 @@ package com.battleroyale.model
 import io.circe.Encoder
 import io.circe.generic.semiauto.deriveEncoder
 
-trait Question
+final case class Question(description: String, correctAnswer: Int)
 
 object Question {
 
-  final case class GeneratedQuestion(description: String, correctAnswer: Int) extends Question
-  final case object NoQuestion extends Question
-
-  implicit val questionEncoder: Encoder[GeneratedQuestion] = deriveEncoder[GeneratedQuestion]
+  implicit val questionEncoder: Encoder[Question] = deriveEncoder[Question]
 }

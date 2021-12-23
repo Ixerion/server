@@ -5,7 +5,6 @@ import cats.effect.{ConcurrentEffect, ExitCode, Timer}
 import cats.syntax.all._
 import com.battleroyale.model.GameState
 import com.battleroyale.model.Player.PlayerId
-import com.battleroyale.model.Question.NoQuestion
 import com.battleroyale.routes.WebSocketRoutes
 import com.battleroyale.service.{GameService, QuestionService, PlayerService, QueueService}
 import com.evolutiongaming.catshelper.LogOf
@@ -23,7 +22,7 @@ object HttpServer {
     for {
       playerRef <- Ref.of[F, List[PlayerId]](List.empty)
       queueRef <- Ref.of[F, Map[PlayerId, Queue[F, WebSocketFrame]]](Map.empty)
-      gameStateRef <- Ref.of[F, GameState](GameState(everyoneAnswered = false, Map.empty, NoQuestion))
+      gameStateRef <- Ref.of[F, GameState](GameState(everyoneAnswered = false, Map.empty, None))
       implicit0(logOf: LogOf[F]) <- LogOf.slf4j[F]
       mathProblemService <- QuestionService.of[F]
       playerService <- PlayerService.of[F](playerRef)
