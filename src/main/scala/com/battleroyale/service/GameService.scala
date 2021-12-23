@@ -13,26 +13,30 @@ import org.http4s.websocket.WebSocketFrame
 trait GameService[F[_]] {
 
   def analyzeAnswer(action: Action): F[Unit]
+
   def initiateGameCycle(players: List[PlayerId]): F[Unit]
+
   def deletePlayer(playerId: PlayerId): F[Unit]
+
   def endGame(players: List[PlayerId]): F[Unit]
-  def analyzeGameState(action: Action): F[GameState]
+
+  def analyzeGameState(action: Action): F[Either[String, GameState]]
 }
 
 object GameService {
   def of[F[_] : Sync : LogOf](playerService: PlayerService[F], queueService: QueueService[F],
-                               gameRef: Ref[F, GameState], mathProblemService: QuestionService[F]): F[GameService[F]] = LogOf[F].apply(getClass).map {
+                              gameRef: Ref[F, GameState], mathProblemService: QuestionService[F]): F[GameService[F]] = LogOf[F].apply(getClass).map {
     log =>
       new GameService[F] {
 
-        def analyzeGameState(action: Action): F[GameState] = for {
-          currentState <- gameRef.updateAndGet(w => w.copy(playersWithAnswers = w.playersWithAnswers.updated(action.playerId, action.answer)))
-          playersWithNoAnswer = currentState.playersWithAnswers.filter(v => v._2.value == 0)
-          everyoneAnswered = playersWithNoAnswer.isEmpty
-          _ <- Applicative[F].whenA(everyoneAnswered)(analyzeAnswerAndKickPlayer(currentState))
-          state <- gameRef.get
-          _ <- queueService.createNotificationForAllPlayers(WebSocketFrame.Text(s"Current Game State: ${state.playersWithAnswers}"))
-        } yield GameState(everyoneAnswered, state.playersWithAnswers, NoQuestion)
+        def analyzeGameState(action: Action): F[Either[String, GameState]] = for {
+          currentState <- gameRef.get
+          updated <- if (currentState.playersWithAnswers.contains(action.playerId)) {
+            analyzePlayerAnswer(action).map(Right(_))
+          } else {
+            Sync[F].pure(Left("Wrong player Id was used for request"))
+          }
+        } yield updated
 
         def endGame(players: List[PlayerId]): F[Unit] = {
           val lastPlayer = players.head
@@ -41,12 +45,23 @@ object GameService {
           } yield ()
         }
 
+        def analyzePlayerAnswer(action: Action): F[GameState] = for {
+          currentState <- gameRef.updateAndGet(w => w.copy(playersWithAnswers = w.playersWithAnswers.updated(action.playerId, action.answer)))
+          _ <- queueService.createNotificationForPlayer(action.playerId, WebSocketFrame.Text("Answer accepted"))
+          playersWithNoAnswer = currentState.playersWithAnswers.filter(v => v._2.value == 0)
+          everyoneAnswered = playersWithNoAnswer.isEmpty
+          _ <- Applicative[F].whenA(everyoneAnswered)(kickPlayerWithWrongAnswer(currentState))
+          state <- gameRef.get
+          _ <- queueService.createNotificationForAllPlayers(WebSocketFrame.Text(s"Current Game State: ${state.playersWithAnswers}"))
+        } yield GameState(everyoneAnswered, state.playersWithAnswers, NoQuestion)
+
         def analyzeAnswer(action: Action): F[Unit] = for {
           gameState <- analyzeGameState(action)
           _ <- gameState match {
-            case GameState(everyoneAnswered, playersWithAnswers, NoQuestion) => if(playersWithAnswers.keys.toList.size == 1) {
+            case Left(logMessage)                                                   => log.info(logMessage)
+            case Right(GameState(everyoneAnswered, playersWithAnswers, NoQuestion)) => if (playersWithAnswers.keys.toList.size == 1) {
               endGame(playersWithAnswers.keys.toList)
-            } else if(everyoneAnswered) {
+            } else if (everyoneAnswered) {
               initiateGameCycle(playersWithAnswers.keys.toList)
             } else {
               Sync[F].unit
@@ -54,7 +69,7 @@ object GameService {
           }
         } yield ()
 
-        def analyzeAnswerAndKickPlayer(gameState: GameState): F[Unit] = for {
+        def kickPlayerWithWrongAnswer(gameState: GameState): F[Unit] = for {
           whoToKick <- mathProblemService.findTheStupidOne(gameState)
           _ <- deletePlayer(whoToKick)
         } yield ()
