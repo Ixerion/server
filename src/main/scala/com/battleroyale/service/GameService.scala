@@ -15,6 +15,8 @@ trait GameService[F[_]] {
   def deletePlayer(playerId: PlayerId): F[Unit]
   def endGame(players: List[PlayerId]): F[Unit]
   def updateGameState(playerId: PlayerId, action: Action): F[Either[String, GameState]]
+  def kickPlayerWithWrongAnswer(gameState: GameState): F[Unit]
+  def analyzeCorrectPlayerAnswer(playerId: PlayerId, action: Action): F[GameState]
 }
 
 object GameService {
