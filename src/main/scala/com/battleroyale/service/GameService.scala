@@ -25,8 +25,8 @@ object GameService {
 
         def updateGameState(playerId: PlayerId, action: Action): F[Either[String, GameState]] = for {
           currentState <- gameStateRef.get
-          updated <- if (currentState.playersWithAnswers.contains(action.playerId) && playerId == action.playerId) {
-            analyzeCorrectPlayerAnswer(action).map(Right(_))
+          updated <- if (currentState.playersWithAnswers.contains(playerId)) {
+            analyzeCorrectPlayerAnswer(playerId, action).map(Right(_))
           } else {
             Sync[F].pure(Left("Wrong player Id was used for request"))
           }
@@ -40,9 +40,9 @@ object GameService {
           } yield ()
         }
 
-        def analyzeCorrectPlayerAnswer(action: Action): F[GameState] = for {
-          currentState <- gameStateRef.updateAndGet(w => w.copy(playersWithAnswers = w.playersWithAnswers.updated(action.playerId, action.answer.some)))
-          _ <- queueService.createNotificationForPlayer(action.playerId, Message("Answer accepted"))
+        def analyzeCorrectPlayerAnswer(playerId: PlayerId, action: Action): F[GameState] = for {
+          currentState <- gameStateRef.updateAndGet(w => w.copy(playersWithAnswers = w.playersWithAnswers.updated(playerId, action.answer.some)))
+          _ <- queueService.createNotificationForPlayer(playerId, Message("Answer accepted"))
           playersWithNoAnswer = !currentState.playersWithAnswers.exists { case (_, maybeAnswer) => maybeAnswer.isEmpty }
           _ <- Applicative[F].whenA(playersWithNoAnswer)(kickPlayerWithWrongAnswer(currentState))
           state <- gameStateRef.get
@@ -51,7 +51,7 @@ object GameService {
         def analyzeAnswer(playerId: PlayerId, action: Action): F[Unit] = for {
           gameState <- updateGameState(playerId, action)
           _ <- gameState match {
-            case Left(message)                                          => queueService.createNotificationForPlayer(playerId, Message(message))
+            case Left(message)                                             => queueService.createNotificationForPlayer(playerId, Message(message))
             case Right(GameState(everyoneAnswered, playersWithAnswers, _)) => if (playersWithAnswers.keys.toList.size == 1) {
               endGame(playersWithAnswers.keys.toList)
             } else if (everyoneAnswered) {
@@ -66,7 +66,7 @@ object GameService {
           whoToKick <- mathProblemService.findTheStupidOne(gameState)
           _ <- whoToKick match {
             case Some(playerId) => deletePlayer(playerId)
-            case None        => queueService.createNotificationForAllPlayers(Message("No players were deleted, new math problem..."))
+            case None           => queueService.createNotificationForAllPlayers(Message("No players were deleted, new math problem..."))
           }
         } yield ()
 

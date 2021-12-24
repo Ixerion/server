@@ -25,14 +25,17 @@ object QuestionService {
 
         def findTheStupidOne(gameState: GameState): F[Option[PlayerId]] = {
           for {
+            correctAnswer <- gameState.question match {
+              case Some(question) => Sync[F].pure(question.correctAnswer)
+              case None        => Sync[F].raiseError(new RuntimeException("Unexpected Game State!"))
+            }
             playerToKick <- Sync[F].delay({
               val players = gameState.playersWithAnswers
-              val correctAnswer = gameState.question.get.correctAnswer
-              if (players.values.map { case Some(value) => value }.toSet.size == 1)
+              if (players.values.collect { case Some(value) => value }.toSet.size == 1)
                 None
               else {
                 players
-                  .map { case (playerId, Some(value)) => (playerId, value) }
+                  .collect { case (playerId, Some(value)) => (playerId, value) }
                   .maxBy { case (_, answer) => math.abs(correctAnswer - answer.value) }._1.some
               }
             })
