@@ -23,7 +23,7 @@ final case class WebSocketRoutes[F[_] : Concurrent : Timer](queueService: QueueS
         case WebSocketFrame.Text(message, _) =>
           Concurrent[F].delay(decode[Action](message)).flatMap {
             case Left(_)       => queueService.createNotificationForPlayer(player.id, Message("Wrong format, try again"))
-            case Right(action) => gameService.analyzeAnswer(action)
+            case Right(action) => gameService.analyzeAnswer(player.id, action)
           }
       }
 

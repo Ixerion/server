@@ -10,11 +10,11 @@ import com.evolutiongaming.catshelper.LogOf
 
 trait GameService[F[_]] {
 
-  def analyzeAnswer(action: Action): F[Unit]
+  def analyzeAnswer(player: PlayerId, action: Action): F[Unit]
   def initiateGameCycle(players: List[PlayerId]): F[Unit]
   def deletePlayer(playerId: PlayerId): F[Unit]
   def endGame(players: List[PlayerId]): F[Unit]
-  def updateGameState(action: Action): F[Either[String, GameState]]
+  def updateGameState(playerId: PlayerId, action: Action): F[Either[String, GameState]]
 }
 
 object GameService {
@@ -23,9 +23,9 @@ object GameService {
     log =>
       new GameService[F] {
 
-        def updateGameState(action: Action): F[Either[String, GameState]] = for {
+        def updateGameState(playerId: PlayerId, action: Action): F[Either[String, GameState]] = for {
           currentState <- gameStateRef.get
-          updated <- if (currentState.playersWithAnswers.contains(action.playerId)) {
+          updated <- if (currentState.playersWithAnswers.contains(action.playerId) && playerId == action.playerId) {
             analyzeCorrectPlayerAnswer(action).map(Right(_))
           } else {
             Sync[F].pure(Left("Wrong player Id was used for request"))
@@ -48,10 +48,10 @@ object GameService {
           state <- gameStateRef.get
         } yield state.copy(everyoneAnswered = playersWithNoAnswer)
 
-        def analyzeAnswer(action: Action): F[Unit] = for {
-          gameState <- updateGameState(action)
+        def analyzeAnswer(playerId: PlayerId, action: Action): F[Unit] = for {
+          gameState <- updateGameState(playerId, action)
           _ <- gameState match {
-            case Left(logMessage)                                          => log.info(logMessage)
+            case Left(message)                                          => queueService.createNotificationForPlayer(playerId, Message(message))
             case Right(GameState(everyoneAnswered, playersWithAnswers, _)) => if (playersWithAnswers.keys.toList.size == 1) {
               endGame(playersWithAnswers.keys.toList)
             } else if (everyoneAnswered) {
