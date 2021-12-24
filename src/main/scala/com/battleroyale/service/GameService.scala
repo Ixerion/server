@@ -5,7 +5,7 @@ import cats.effect.Sync
 import cats.effect.concurrent.Ref
 import cats.implicits._
 import com.battleroyale.model.Player.PlayerId
-import com.battleroyale.model.{Action, Answer, GameState, Message}
+import com.battleroyale.model.{Action, GameState, Message}
 import com.evolutiongaming.catshelper.LogOf
 
 trait GameService[F[_]] {
@@ -41,9 +41,9 @@ object GameService {
         }
 
         def analyzeCorrectPlayerAnswer(action: Action): F[GameState] = for {
-          currentState <- gameStateRef.updateAndGet(w => w.copy(playersWithAnswers = w.playersWithAnswers.updated(action.playerId, action.answer)))
+          currentState <- gameStateRef.updateAndGet(w => w.copy(playersWithAnswers = w.playersWithAnswers.updated(action.playerId, action.answer.some)))
           _ <- queueService.createNotificationForPlayer(action.playerId, Message("Answer accepted"))
-          playersWithNoAnswer = !currentState.playersWithAnswers.exists(v => v._2.value == 0)
+          playersWithNoAnswer = !currentState.playersWithAnswers.exists { case (_, maybeAnswer) => maybeAnswer.isEmpty }
           _ <- Applicative[F].whenA(playersWithNoAnswer)(kickPlayerWithWrongAnswer(currentState))
           state <- gameStateRef.get
         } yield state.copy(everyoneAnswered = playersWithNoAnswer)
@@ -71,7 +71,7 @@ object GameService {
         } yield ()
 
         def initiateGameCycle(players: List[PlayerId]): F[Unit] = {
-          val playersInGame = players.map(playerId => (playerId, Answer(0))).toMap
+          val playersInGame = players.map(playerId => (playerId, None)).toMap
           for {
             _ <- gameStateRef.update(_.copy(playersWithAnswers = playersInGame))
             generatedQuestion <- mathProblemService.generateMathProblem

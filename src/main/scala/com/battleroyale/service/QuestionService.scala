@@ -28,10 +28,12 @@ object QuestionService {
             playerToKick <- Sync[F].delay({
               val players = gameState.playersWithAnswers
               val correctAnswer = gameState.question.get.correctAnswer
-              if (players.values.map(_.value).toSet.size == 1)
+              if (players.values.map { case Some(value) => value }.toSet.size == 1)
                 None
               else {
-                players.maxBy {case (_, answer) =>math.abs(correctAnswer - answer.value)}._1.some
+                players
+                  .map { case (playerId, Some(value)) => (playerId, value) }
+                  .maxBy { case (_, answer) => math.abs(correctAnswer - answer.value) }._1.some
               }
             })
             _ <- log.info(s"Player to kick: $playerToKick")
