@@ -9,6 +9,7 @@ import com.evolutiongaming.catshelper.LogOf
 import fs2.concurrent.Queue
 
 trait QueueService[F[_]] {
+
   def createQueueForPlayer(playerId: PlayerId): F[Queue[F, Message]]
   def createNotificationForPlayer(playerId: PlayerId, message: Message): F[Unit]
   def createNotificationForAllPlayers(message: Message): F[Unit]
@@ -30,8 +31,11 @@ object QueueService {
 
         def createNotificationForPlayer(playerId: PlayerId, message: Message): F[Unit] = for {
           playersMap <- queueRef.get
-          queue = playersMap(playerId)
-          _ <- queue.enqueue1(message)
+          queue = playersMap.get(playerId)
+          _ <- queue match {
+            case Some(queue) => queue.enqueue1(message)
+            case None        => Concurrent[F].unit
+          }
         } yield ()
 
         def createNotificationForAllPlayers(message: Message): F[Unit] = for {

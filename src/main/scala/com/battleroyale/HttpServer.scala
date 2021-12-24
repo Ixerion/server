@@ -25,10 +25,10 @@ object HttpServer {
     queueRef <- Ref.of[F, Map[PlayerId, Queue[F, Message]]](Map.empty)
     gameStateRef <- Ref.of[F, GameState](GameState(everyoneAnswered = false, Map.empty, None))
     implicit0(logOf: LogOf[F]) <- LogOf.slf4j[F]
-    mathProblemService <- QuestionService.of[F]
+    questionService <- QuestionService.of[F]
     playerService <- PlayerService.of[F](playerRef)
     queueService <- QueueService.of[F](queueRef)
-    gameService <- GameService.of[F](playerService, queueService, gameStateRef, mathProblemService)
+    gameService <- GameService.of[F](playerService, queueService, gameStateRef, questionService)
     wsRoutes = WebSocketRoutes[F](queueService, playerService, gameService).routes
     appConf <- ConfigSource.default.load[ServiceConf] match {
       case Left(_)      => ConcurrentEffect[F].raiseError(new RuntimeException("Error loading config"))

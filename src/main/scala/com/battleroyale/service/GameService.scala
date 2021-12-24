@@ -21,7 +21,7 @@ trait GameService[F[_]] {
 
 object GameService {
   def of[F[_] : Sync : LogOf](playerService: PlayerService[F], queueService: QueueService[F],
-                              gameStateRef: Ref[F, GameState], mathProblemService: QuestionService[F]): F[GameService[F]] = LogOf[F].apply(getClass).map {
+                              gameStateRef: Ref[F, GameState], questionService: QuestionService[F]): F[GameService[F]] = LogOf[F].apply(getClass).map {
     log =>
       new GameService[F] {
 
@@ -30,7 +30,7 @@ object GameService {
           updated <- if (currentState.playersWithAnswers.contains(playerId)) {
             analyzeCorrectPlayerAnswer(playerId, action).map(Right(_))
           } else {
-            Sync[F].pure(Left("Wrong player Id was used for request"))
+            Sync[F].pure(Left("Sorry, you are not in the game"))
           }
           _ <- log.info(s"Game state: ${updated.toString}")
         } yield updated
@@ -53,7 +53,8 @@ object GameService {
         def analyzeAnswer(playerId: PlayerId, action: Action): F[Unit] = for {
           gameState <- updateGameState(playerId, action)
           _ <- gameState match {
-            case Left(message)                                             => queueService.createNotificationForPlayer(playerId, Message(message))
+            case Left(message)                                             => queueService.createNotificationForPlayer(playerId, Message(message)) *>
+              queueService.deleteNotificationsForPlayer(playerId) *> playerService.removePlayer(playerId)
             case Right(GameState(everyoneAnswered, playersWithAnswers, _)) => if (playersWithAnswers.keys.toList.size == 1) {
               endGame(playersWithAnswers.keys.toList)
             } else if (everyoneAnswered) {
@@ -65,10 +66,10 @@ object GameService {
         } yield ()
 
         def kickPlayerWithWrongAnswer(gameState: GameState): F[Unit] = for {
-          whoToKick <- mathProblemService.findTheStupidOne(gameState)
+          whoToKick <- questionService.findTheStupidOne(gameState)
           _ <- whoToKick match {
             case Some(playerId) => deletePlayer(playerId)
-            case None           => queueService.createNotificationForAllPlayers(Message("No players were deleted, new math problem..."))
+            case None           => queueService.createNotificationForAllPlayers(Message("No players were deleted, generating new question..."))
           }
         } yield ()
 
@@ -76,7 +77,9 @@ object GameService {
           val playersInGame = players.map(playerId => (playerId, None)).toMap
           for {
             _ <- gameStateRef.update(_.copy(playersWithAnswers = playersInGame))
-            generatedQuestion <- mathProblemService.generateQuestion
+            _ <- log.info(s"Players in game: $playersInGame")
+            _ <- queueService.createNotificationForAllPlayers(Message(s"Players in game: $playersInGame"))
+            generatedQuestion <- questionService.generateQuestion
             _ <- gameStateRef.updateAndGet(_.copy(question = Some(generatedQuestion)))
             _ <- queueService.createNotificationForAllPlayers(Message(s"Initiating new game cycle... \nNew question: ${generatedQuestion.description}"))
           } yield ()
@@ -87,8 +90,7 @@ object GameService {
           _ <- queueService.deleteNotificationsForPlayer(playerId)
           _ <- playerService.removePlayer(playerId)
           stateBeforeDeletion <- gameStateRef.get
-          updated <- gameStateRef.updateAndGet(_.copy(playersWithAnswers = stateBeforeDeletion.playersWithAnswers - playerId))
-          _ <- queueService.createNotificationForAllPlayers(Message(s"After successful deletion: ${updated.playersWithAnswers.toString()}"))
+          _ <- gameStateRef.update(_.copy(playersWithAnswers = stateBeforeDeletion.playersWithAnswers - playerId))
         } yield ()
       }
   }
