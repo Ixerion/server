@@ -22,36 +22,27 @@ object QueueService {
     log =>
       new QueueService[F] {
 
-        def createQueueForPlayer(playerId: PlayerId): F[Queue[F, Message]] = {
-          Queue.unbounded[F, Message].flatMap {
-            queue =>
-              for {
-                _ <- queueRef.update(playerQueueMap => playerQueueMap + (playerId -> queue))
-              } yield queue
-          }
-        }
+        def createQueueForPlayer(playerId: PlayerId): F[Queue[F, Message]] = for {
+          queue <- Queue.unbounded[F, Message]
+          _ <- queueRef.update(playerQueueMap => playerQueueMap + (playerId -> queue))
+          _ <- log.info(s"Created new Queue for player $playerId")
+        } yield queue
 
-        def createNotificationForPlayer(playerId: PlayerId, message: Message): F[Unit] = {
-          val map = queueRef.get
-          map.flatMap(playersMap => {
-            val queue = playersMap(playerId)
-            queue.enqueue1(message)
-          })
-        }
+        def createNotificationForPlayer(playerId: PlayerId, message: Message): F[Unit] = for {
+          playersMap <- queueRef.get
+          queue = playersMap(playerId)
+          _ <- queue.enqueue1(message)
+        } yield ()
 
-        def createNotificationForAllPlayers(message: Message): F[Unit] = {
-          val map = queueRef.get
-          map.flatMap(playerQueueMap => {
-            playerQueueMap.values.toList.map(_.enqueue1(message)).sequence_
-          })
-        }
+        def createNotificationForAllPlayers(message: Message): F[Unit] = for {
+          playersMap <- queueRef.get
+          _ <- playersMap.values.toList.map(_.enqueue1(message)).sequence_
+        } yield ()
 
-        def createNotificationForSpecificPlayers(players: List[PlayerId], message: Message): F[Unit] = {
-          val map = queueRef.get
-          map.flatMap(playerQueueMap => {
-            playerQueueMap.filter(v => players.contains(v._1)).values.toList.map(_.enqueue1(message)).sequence_
-          })
-        }
+        def createNotificationForSpecificPlayers(players: List[PlayerId], message: Message): F[Unit] = for {
+          playersMap <- queueRef.get
+          _ <- playersMap.filter(pair => players.contains(pair._1)).values.toList.map(_.enqueue1(message)).sequence_
+        } yield ()
 
         def deleteNotificationsForPlayer(player: PlayerId): F[Unit] = for {
           _ <- queueRef.update(_ - player)
