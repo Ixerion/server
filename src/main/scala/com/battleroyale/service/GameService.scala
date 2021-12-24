@@ -74,7 +74,7 @@ object GameService {
           val playersInGame = players.map(playerId => (playerId, None)).toMap
           for {
             _ <- gameStateRef.update(_.copy(playersWithAnswers = playersInGame))
-            generatedQuestion <- mathProblemService.generateMathProblem
+            generatedQuestion <- mathProblemService.generateQuestion
             _ <- gameStateRef.updateAndGet(_.copy(question = Some(generatedQuestion)))
             _ <- queueService.createNotificationForAllPlayers(Message(s"Initiating new game cycle... \nNew question: ${generatedQuestion.description}"))
           } yield ()

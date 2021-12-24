@@ -1,15 +1,16 @@
 package com.battleroyale.service
 
-import cats.Monad
 import cats.effect.Sync
 import cats.implicits._
 import com.battleroyale.model.Player.PlayerId
 import com.battleroyale.model.{GameState, Question}
 import com.evolutiongaming.catshelper.LogOf
 
+import scala.util.Random
+
 trait QuestionService[F[_]] {
 
-  def generateMathProblem: F[Question]
+  def generateQuestion: F[Question]
   def findTheStupidOne(gameState: GameState): F[Option[PlayerId]]
 }
 
@@ -18,10 +19,23 @@ object QuestionService {
   def of[F[_] : Sync : LogOf]: F[QuestionService[F]] = LogOf[F].apply(getClass).map {
     log =>
       new QuestionService[F] {
-        def generateMathProblem: F[Question] = for {
-          question <- Monad[F].pure(Question("3 + 2", 5))
-          _ <- log.info(s"New question created: ${question.description}")
+        def generateQuestion: F[Question] = for {
+          question <- Sync[F].delay(generate)
+          _ <- log.info(s"New question created: ${question.description}, correct answer: ${question.correctAnswer}")
         } yield question
+
+        private def generate: Question = {
+          val operations = List("-", "+", "*")
+          val random = new Random
+          val stringRepresentation = s"${(math.random() * 10).toInt} ${operations(random.nextInt(operations.size))} ${(math.random() * 10).toInt}"
+          val answer = stringRepresentation.split("\\s").toList match {
+            case l :: "+" :: r :: _ => l.toInt + r.toInt
+            case l :: "-" :: r :: _ => l.toInt - r.toInt
+            case l :: "*" :: r :: _ => l.toInt * r.toInt
+          }
+
+          Question(stringRepresentation, answer)
+        }
 
         def findTheStupidOne(gameState: GameState): F[Option[PlayerId]] = {
           for {
