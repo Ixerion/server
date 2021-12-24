@@ -3,7 +3,7 @@ package com.battleroyale
 import cats.effect.concurrent.Ref
 import cats.effect.{ConcurrentEffect, ExitCode, Timer}
 import cats.syntax.all._
-import com.battleroyale.conf.ServiceConf
+import com.battleroyale.conf.{AppConfig, ServiceConf}
 import com.battleroyale.model.Player.PlayerId
 import com.battleroyale.model.{GameState, Message}
 import com.battleroyale.routes.WebSocketRoutes
@@ -30,13 +30,13 @@ object HttpServer {
     queueService <- QueueService.of[F](queueRef)
     gameService <- GameService.of[F](playerService, queueService, gameStateRef, mathProblemService)
     wsRoutes = WebSocketRoutes[F](queueService, playerService, gameService).routes
-    conf <- ConfigSource.default.load[ServiceConf] match {
+    appConf <- ConfigSource.default.load[ServiceConf] match {
       case Left(_)      => ConcurrentEffect[F].raiseError(new RuntimeException("Error loading config"))
-      case Right(value) => ConcurrentEffect[F].pure(value)
+      case Right(value) => ConcurrentEffect[F].pure(AppConfig(value))
     }
     finalApp = Logger.httpApp(logHeaders = true, logBody = true)(wsRoutes.orNotFound)
     _ <- BlazeServerBuilder[F](ExecutionContext.global)
-      .bindHttp(port = conf.port.number, host = conf.host)
+      .bindHttp(port = appConf.serviceConf.port.number, host = appConf.serviceConf.host)
       .withHttpApp(finalApp)
       .serve
       .compile
