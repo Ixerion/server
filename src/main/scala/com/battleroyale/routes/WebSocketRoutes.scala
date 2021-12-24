@@ -1,7 +1,7 @@
 package com.battleroyale.routes
 
 import cats.Applicative
-import cats.effect.{Concurrent, Timer}
+import cats.effect.Concurrent
 import cats.syntax.all._
 import com.battleroyale.model.{Action, Message, Player}
 import com.battleroyale.service.{GameService, PlayerService, QueueService}
@@ -12,7 +12,7 @@ import org.http4s.dsl.Http4sDsl
 import org.http4s.server.websocket.WebSocketBuilder
 import org.http4s.websocket.WebSocketFrame
 
-final case class WebSocketRoutes[F[_] : Concurrent : Timer](queueService: QueueService[F], playerService: PlayerService[F], gameService: GameService[F])
+final case class WebSocketRoutes[F[_] : Concurrent](queueService: QueueService[F], playerService: PlayerService[F], gameService: GameService[F])
   extends Http4sDsl[F] {
 
   // websocat "ws://localhost:9001/client"
