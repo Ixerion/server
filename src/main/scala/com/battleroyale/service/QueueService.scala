@@ -1,6 +1,5 @@
 package com.battleroyale.service
 
-import cats.Monad
 import cats.effect.Concurrent
 import cats.effect.concurrent.Ref
 import cats.syntax.all._
@@ -19,7 +18,7 @@ trait QueueService[F[_]] {
 
 object QueueService {
 
-  def of[F[_] : Monad : Concurrent : LogOf](queueRef: Ref[F, Map[PlayerId, Queue[F, Message]]]): F[QueueService[F]] = LogOf[F].apply(getClass).map {
+  def of[F[_] : Concurrent : LogOf](queueRef: Ref[F, Map[PlayerId, Queue[F, Message]]]): F[QueueService[F]] = LogOf[F].apply(getClass).map {
     log =>
       new QueueService[F] {
 

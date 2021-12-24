@@ -27,7 +27,7 @@ object QuestionService {
           for {
             correctAnswer <- gameState.question match {
               case Some(question) => Sync[F].pure(question.correctAnswer)
-              case None        => Sync[F].raiseError(new RuntimeException("Unexpected Game State!"))
+              case None           => Sync[F].raiseError(new RuntimeException("Unexpected Game State!"))
             }
             playerToKick <- Sync[F].delay({
               val players = gameState.playersWithAnswers
