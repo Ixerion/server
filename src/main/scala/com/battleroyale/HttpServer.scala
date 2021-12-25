@@ -18,25 +18,32 @@ import pureconfig.generic.auto._
 
 import scala.concurrent.ExecutionContext
 
+case class Services[F[_]](queueService: QueueService[F], playerService: PlayerService[F])
+
 object HttpServer {
 
+  private def initServices[F[_]: ConcurrentEffect : Timer : LogOf](playerRef: Ref[F, List[PlayerId]], queueRef: Ref[F, Map[PlayerId, Queue[F, Message]]]): F[Services[F]] = for {
+    queueService <- QueueService.of[F](queueRef)
+    playerService <- PlayerService.of[F](playerRef)
+  } yield Services(queueService, playerService)
+
   def run[F[_] : ConcurrentEffect : Timer]: F[ExitCode] = for {
+    appConf <- ConfigSource.default.load[AppConfig] match {
+      case Left(error)  => ConcurrentEffect[F].raiseError(new RuntimeException(s"$error"))
+      case Right(value) => ConcurrentEffect[F].pure(value)
+    }
     playerRef <- Ref.of[F, List[PlayerId]](List.empty)
     queueRef <- Ref.of[F, Map[PlayerId, Queue[F, Message]]](Map.empty)
     gameStateRef <- Ref.of[F, GameState](GameState(everyoneAnswered = false, Map.empty, None))
     implicit0(logOf: LogOf[F]) <- LogOf.slf4j[F]
     questionService <- QuestionService.of[F]
-    playerService <- PlayerService.of[F](playerRef)
-    queueService <- QueueService.of[F](queueRef)
-    gameService <- GameService.of[F](playerService, queueService, gameStateRef, questionService)
-    wsRoutes = WebSocketRoutes[F](queueService, playerService, gameService).routes
-    appConf <- ConfigSource.default.load[ServiceConf] match {
-      case Left(_)      => ConcurrentEffect[F].raiseError(new RuntimeException("Error loading config"))
-      case Right(value) => ConcurrentEffect[F].pure(AppConfig(value))
-    }
+    services <- initServices[F](playerRef, queueRef)
+    gameService <- GameService.of[F](services.playerService, services.queueService, gameStateRef, questionService)
+    wsRoutes = WebSocketRoutes[F](services.queueService, services.playerService, gameService, appConf.gameConf).routes
+
     finalApp = Logger.httpApp(logHeaders = true, logBody = true)(wsRoutes.orNotFound)
     _ <- BlazeServerBuilder[F](ExecutionContext.global)
-      .bindHttp(port = appConf.serviceConf.port.number, host = appConf.serviceConf.host)
+      .bindHttp(port = appConf.serviceConf.port, host = appConf.serviceConf.host)
       .withHttpApp(finalApp)
       .serve
       .compile

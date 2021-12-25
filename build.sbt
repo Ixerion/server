@@ -25,5 +25,8 @@ libraryDependencies ++= Seq(
   "io.circe" %% "circe-parser" % circeVersion,
   "io.circe" %% "circe-generic-extras" % circeVersion,
   "com.evolutiongaming" %% "cats-helper" % "2.2.3",
+  "com.evolutiongaming" %% "cats-helper-testkit" % "2.2.3" % Test,
+  "org.scalatest" %% "scalatest" % "3.2.10" % Test,
+  "org.scalamock" %% "scalamock" % "5.1.0" % Test,
   "com.github.pureconfig" %% "pureconfig" % "0.17.1",
 )
