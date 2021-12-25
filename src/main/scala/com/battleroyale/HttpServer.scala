@@ -6,7 +6,7 @@ import cats.syntax.all._
 import com.battleroyale.conf.{AppConfig, ServiceConf}
 import com.battleroyale.model.Player.PlayerId
 import com.battleroyale.model.{GameState, Message}
-import com.battleroyale.routes.WebSocketRoutes
+import com.battleroyale.routes.GameRoutes
 import com.battleroyale.service.{GameService, PlayerService, QuestionService, QueueService}
 import com.evolutiongaming.catshelper.LogOf
 import fs2.concurrent.Queue
@@ -39,7 +39,7 @@ object HttpServer {
     questionService <- QuestionService.of[F]
     services <- initServices[F](playerRef, queueRef)
     gameService <- GameService.of[F](services.playerService, services.queueService, gameStateRef, questionService)
-    wsRoutes = WebSocketRoutes[F](services.queueService, services.playerService, gameService, appConf.gameConf).routes
+    wsRoutes = GameRoutes[F](services.queueService, services.playerService, gameService, appConf.gameConf).routes
 
     finalApp = Logger.httpApp(logHeaders = true, logBody = true)(wsRoutes.orNotFound)
     _ <- BlazeServerBuilder[F](ExecutionContext.global)

@@ -13,7 +13,7 @@ import org.http4s.dsl.Http4sDsl
 import org.http4s.server.websocket.WebSocketBuilder
 import org.http4s.websocket.WebSocketFrame
 
-final case class WebSocketRoutes[F[_] : Concurrent](queueService: QueueService[F], playerService: PlayerService[F], gameService: GameService[F], gameConf: GameConf)
+final case class GameRoutes[F[_] : Concurrent](queueService: QueueService[F], playerService: PlayerService[F], gameService: GameService[F], gameConf: GameConf)
   extends Http4sDsl[F] {
 
   // websocat "ws://localhost:9001/client"
