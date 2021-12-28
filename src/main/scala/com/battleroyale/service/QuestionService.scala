@@ -27,7 +27,7 @@ object QuestionService {
         private def generate: Question = {
           val operations = List("-", "+", "*")
           val random = new Random
-          val stringRepresentation = s"${(math.random() * 1000).toInt} ${operations(random.nextInt(operations.size))} ${(math.random() * 1000).toInt}"
+          val stringRepresentation = s"${(math.random() * 10).toInt} ${operations(random.nextInt(operations.size))} ${(math.random() * 10).toInt}"
           val answer = stringRepresentation.split("\\s").toList match {
             case l :: "+" :: r :: _ => l.toInt + r.toInt
             case l :: "-" :: r :: _ => l.toInt - r.toInt
