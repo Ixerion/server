@@ -20,21 +20,20 @@ object PlayerService {
   def of[F[_] : Monad : LogOf](ref: Ref[F, List[PlayerId]]): F[PlayerService[F]] = LogOf[F].apply(getClass).map {
     log =>
       new PlayerService[F] {
-        def createPlayer: F[Player] = for {
-          players <- ref.get
-          freshPlayer = Player(UUID.randomUUID().toString)
-          _ <- log.info(s"Created player: ${freshPlayer.id}")
-          updatedList = players :+ freshPlayer.id
-          _ <- ref.update(_ => updatedList)
-        } yield freshPlayer
 
-        def playersList: F[List[PlayerId]] = for {
-          players <- ref.get
-        } yield players
+        def createPlayer: F[Player] =  {
+          val player = Player(UUID.randomUUID().toString)
+          ref.update(list => {
+            list :+ player.id
+          }).flatMap(_ => log.info(s"Created player: ${player.id}"))
+            .map(_ => player)
+        }
 
-        def removePlayer(playerId: PlayerId): F[Unit] = for {
-          _ <- ref.update(list => list.filter(_ != playerId))
-        } yield ()
+        def playersList: F[List[PlayerId]] = ref.get
+
+        def removePlayer(playerId: PlayerId): F[Unit] = {
+          ref.update(list => list.filter(_ != playerId))
+        }
       }
   }
 
